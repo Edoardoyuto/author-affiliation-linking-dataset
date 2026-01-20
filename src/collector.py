@@ -3,6 +3,7 @@ import os
 import tarfile
 import time
 from pathlib import Path
+import json
 
 # 共通の設定
 DATA_RAW_DIR = Path("data/raw")
@@ -38,25 +39,32 @@ def collect_multiple_papers(id_list):
             # arXivサーバーへの負荷軽減のために2秒待機
             time.sleep(2)
 
-def find_main_tex(directory):
+def find_author_file(directory):
     """
-    ディレクトリ内を探索し、\documentclass を含むメインの .tex ファイルを特定する
+    ディレクトリ内の全 .tex ファイルをスキャンし、
+    \author{ が記述されているファイルを特定する
+    複数あった場合、とりあえず最初に見つかったものを返す
+    何も見つからなかった場合は None を返して警告を出す
     """
-    # ディレクトリ内の全ファイルを再帰的に探索
+    author_files = []
+
     for root, _, files in os.walk(directory):
         for file in files:
             if file.endswith(".tex"):
                 file_path = Path(root) / file
                 try:
-                    # UTF-8で読み込みを試行し、エラーは無視（バイナリ混入対策）
                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                         content = f.read()
-                        # \documentclass があればそれがメインファイル
-                        if "\\documentclass" in content:
-                            return file_path
+                        # \author{ というタグが含まれているかチェック
+                        if "\\author" in content:
+                            author_files.append(file_path)
                 except Exception as e:
                     print(f"Error reading {file}: {e}")
-    return None
+
+    if not author_files:
+        print(f"Warning: Could not find author file in {directory}")
+        return None
+    return author_files[0]
 
 def download_and_extract_source(paper):
     arxiv_id = paper.get_short_id()
@@ -71,17 +79,24 @@ def download_and_extract_source(paper):
     try:
         with tarfile.open(tar_path) as tar:
             tar.extractall(path=paper_dir)
+
+        author_tex = find_author_file(paper_dir)
+        if author_tex:
+            # ファイル名だけを保存（ディレクトリ移動に強くするため）
+            metadata = {
+                "title": paper.title,
+                "author_file": author_tex.name,
+                "arxiv_id": paper.get_short_id()
+            }
+            save_metadata(paper_dir, metadata)         
         
-        # 【追加】メインファイルの特定
-        main_tex = find_main_tex(paper_dir)
-        if main_tex:
-            print(f"Identified Main TeX: {main_tex.relative_to(DATA_RAW_DIR)}")
-        else:
-            print(f"Warning: Could not find main .tex in {arxiv_id}")
-            
+
     except Exception as e:
         print(f"Failed to process {arxiv_id}: {e}")
 
+def save_metadata(paper_dir, paper_info):
+    with open(paper_dir / "metadata.json", "w", encoding="utf-8") as f:
+        json.dump(paper_info, f, indent=4, ensure_ascii=False)
 
 if __name__ == "__main__":
     target_ids = ["2601.11505v1", "2412.13151", "1912.13318"]
