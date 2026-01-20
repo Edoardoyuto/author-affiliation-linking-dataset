@@ -1,0 +1,9 @@
+data/
+__pycache__/
+.venv/
+*.pyc
+.vscode/
+.ipynb_checkpoints/
+*.log
+*.aux
+*.out
