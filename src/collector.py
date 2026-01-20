@@ -1,6 +1,7 @@
 import arxiv
 import os
 import tarfile
+import time
 from pathlib import Path
 
 # 共通の設定
@@ -51,9 +52,18 @@ def download_and_extract_source(paper):
         # 一部の古い論文などはtar形式でない場合があるためのハンドリング
         print(f"展開に失敗しました（単一のTeXファイルの可能性があります）: {e}")
 
+def collect_multiple_papers(id_list):
+    """
+    リスト内のすべての論文を順番にダウンロード・展開する
+    """
+    for arxiv_id in id_list:
+        paper = get_paper_metadata(arxiv_id)
+        if paper:
+            download_and_extract_source(paper)
+            # arXivサーバーへの負荷軽減のために2秒待機
+            time.sleep(2)
+
 if __name__ == "__main__":
-    test_id = "2412.13151"
-    paper = get_paper_metadata(test_id)
-    
-    if paper:
-        download_and_extract_source(paper)
+   
+    papr_list = ["2101.00001", "2101.00002", "2101.00003"]
+    collect_multiple_papers(papr_list)
