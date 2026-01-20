@@ -27,31 +27,6 @@ def get_paper_metadata(arxiv_id):
         print(f"メタデータ取得中にエラーが発生しました: {e}")
         return None
 
-def download_and_extract_source(paper):
-    """
-    ソースファイルをダウンロードして展開する
-    """
-    arxiv_id = paper.get_short_id()
-    # 保存先のディレクトリ（data/raw/ID）を作成
-    paper_dir = DATA_RAW_DIR / arxiv_id
-    paper_dir.mkdir(parents=True, exist_ok=True)
-
-    # 1. ダウンロード
-    tar_path = paper_dir / f"{arxiv_id}.tar.gz"
-    if not tar_path.exists():
-        print(f"ダウンロード開始: {arxiv_id}...")
-        paper.download_source(dirpath=str(paper_dir), filename=tar_path.name)
-    
-    # 2. 展開（解凍）
-    try:
-        print(f"展開中: {tar_path.name}...")
-        with tarfile.open(tar_path) as tar:
-            tar.extractall(path=paper_dir)
-        print(f"展開完了: {paper_dir}")
-    except Exception as e:
-        # 一部の古い論文などはtar形式でない場合があるためのハンドリング
-        print(f"展開に失敗しました（単一のTeXファイルの可能性があります）: {e}")
-
 def collect_multiple_papers(id_list):
     """
     リスト内のすべての論文を順番にダウンロード・展開する
@@ -63,7 +38,56 @@ def collect_multiple_papers(id_list):
             # arXivサーバーへの負荷軽減のために2秒待機
             time.sleep(2)
 
+def find_main_tex(directory):
+    """
+    ディレクトリ内を探索し、\documentclass を含むメインの .tex ファイルを特定する
+    """
+    # ディレクトリ内の全ファイルを再帰的に探索
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".tex"):
+                file_path = Path(root) / file
+                try:
+                    # UTF-8で読み込みを試行し、エラーは無視（バイナリ混入対策）
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                        # \documentclass があればそれがメインファイル
+                        if "\\documentclass" in content:
+                            return file_path
+                except Exception as e:
+                    print(f"Error reading {file}: {e}")
+    return None
+
+def download_and_extract_source(paper):
+    arxiv_id = paper.get_short_id()
+    paper_dir = DATA_RAW_DIR / arxiv_id
+    paper_dir.mkdir(parents=True, exist_ok=True)
+
+    tar_path = paper_dir / f"{arxiv_id}.tar.gz"
+    if not tar_path.exists():
+        print(f"\n--- Downloading {arxiv_id} ---")
+        paper.download_source(dirpath=str(paper_dir), filename=tar_path.name)
+    
+    try:
+        with tarfile.open(tar_path) as tar:
+            tar.extractall(path=paper_dir)
+        
+        # 【追加】メインファイルの特定
+        main_tex = find_main_tex(paper_dir)
+        if main_tex:
+            print(f"Identified Main TeX: {main_tex.relative_to(DATA_RAW_DIR)}")
+        else:
+            print(f"Warning: Could not find main .tex in {arxiv_id}")
+            
+    except Exception as e:
+        print(f"Failed to process {arxiv_id}: {e}")
+
+
 if __name__ == "__main__":
-   
-    papr_list = ["2101.00001", "2101.00002", "2101.00003"]
-    collect_multiple_papers(papr_list)
+    target_ids = ["2601.11505v1", "2412.13151", "1912.13318"]
+    for arxiv_id in target_ids:
+        paper = get_paper_metadata(arxiv_id)
+        if paper:
+            download_and_extract_source(paper)
+            time.sleep(1)
+
