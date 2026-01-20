@@ -3,3 +3,6 @@ TexSoup
 opencv-python-headless
 requests
 pyyaml
+beautifulsoup4
+lxml
+arxiv
