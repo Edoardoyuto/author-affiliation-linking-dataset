@@ -1,9 +1,6 @@
 import re
 
 class LatexParser:
-    """
-    LaTeXソースコードのクリーニングと基本的な文字列操作を担当するクラス。
-    """
 
     @staticmethod
     def strip_comments(text):
