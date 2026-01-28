@@ -139,4 +139,5 @@ if __name__ == "__main__":
         papers = search_papers(category=target_category, max_results=3)
         id_list = [paper.get_short_id() for paper in papers]
         collect_multiple_papers(id_list)
-        print(f"Metadata saved for {arxiv_id}")
+    
+    print("\n=== All done! ===")
