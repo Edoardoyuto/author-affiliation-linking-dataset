@@ -10,15 +10,27 @@ import csv
 
 def load_manifest(path):
     """
-    manifest.jsonを読み込む
+    manifest.jsonを読み込む。
+    ファイルが存在しない、または中身が空の場合は、
+    作成はせずに「空の辞書 {}」として扱う。
     """
-    with open(path, 'r', encoding='utf-8') as f:
-        manifest = json.load(f)
-    return manifest
+    if not os.path.exists(path):
+        return {}
 
-def save_manifest(manifest, path):
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if not content:
+                return {}
+            return json.loads(content)
+    except (json.JSONDecodeError, IOError):
+        # 壊れていたり読み込めない場合も安全に空の辞書を返す
+        print(f"  [Info] Manifest {path} is empty or invalid. Starting fresh.")
+        return {}
+
+def save_manifest(path, manifest):
     """
-    manifest.jsonを保存する
+    manifest.jsonを保存する 
     """
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(manifest, f, ensure_ascii=False, indent=4)
