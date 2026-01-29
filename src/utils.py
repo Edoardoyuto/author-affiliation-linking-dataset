@@ -45,24 +45,28 @@ def append_to_jsonl(path, data):
         line = json.dumps(data, ensure_ascii=False)
         f.write(line + '\n')
 
-def get_main_tex_path(folder_path):
+def get_tex_paths(folder_path):
     """
-    metadata.json を開き、"author_file" に指定されたファイルパスを返す。
+    ドキュメントクラス判定用(root)と著者抽出用(author)のTeXパスを特定する。
+    1. metadata.json の指定を確認
     """
     metadata_path = os.path.join(folder_path, "metadata.json")
-    
-    if not os.path.exists(metadata_path):
-        return None
+    root_path = None
+    author_path = None
 
-    try:
-        with open(metadata_path, 'r', encoding='utf-8') as f:
-            meta = json.load(f)
-            # metadata.json 内の "author_file" キーを取得
-            tex_filename = meta.get("author_file")
-            
-            if tex_filename:
-                return os.path.join(folder_path, tex_filename)
-    except Exception as e:
-        print(f"  [Warning] Failed to read metadata.json in {folder_path}: {e}")
-    
-    return None
+    # --- 1. メタデータからの取得試行 ---
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+                r_file = meta.get("root_file")
+                a_file = meta.get("author_file")
+                
+                if r_file:
+                    root_path = os.path.join(folder_path, r_file)
+                if a_file:
+                    author_path = os.path.join(folder_path, a_file)
+        except Exception as e:
+            print(f"  [Warning] metadata.json の読み込み失敗 ({folder_path}): {e}")
+
+        return root_path, author_path
