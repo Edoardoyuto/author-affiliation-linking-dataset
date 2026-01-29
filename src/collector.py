@@ -39,14 +39,16 @@ def collect_multiple_papers(id_list):
             # arXivサーバーへの負荷軽減のために2秒待機
             time.sleep(2)
 
-def find_author_file(directory):
+def find_paper_structure(directory):
     """
     ディレクトリ内の全 .tex ファイルをスキャンし、
-    \author{ が記述されているファイルを特定する
-    複数あった場合、とりあえず最初に見つかったものを返す
-    何も見つからなかった場合は None を返して警告を出す
+    「ドキュメントクラス」と「著者情報」がどこにあるかを特定する
     """
-    author_files = []
+    author_keywords = ["\\author", "\\address", "\\affiliation", "\\email", "\\affil"]
+    root_keywords = ["\\documentclass"]
+    
+    root_file = None
+    author_file = None
 
     for root, _, files in os.walk(directory):
         for file in files:
@@ -55,16 +57,24 @@ def find_author_file(directory):
                 try:
                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                         content = f.read()
-                        # \author{ というタグが含まれているかチェック
-                        if "\\author" in content:
-                            author_files.append(file_path)
+                        
+                        # ドキュメントクラスが含まれているか（rootの特定）
+                        if any(k in content for k in root_keywords):
+                            root_file = file_path
+                        
+                        # 著者情報キーワードが含まれているか（authorの特定）
+                        if any(k in content for k in author_keywords):
+                            author_file = file_path
+                            
                 except Exception as e:
                     print(f"Error reading {file}: {e}")
 
-    if not author_files:
-        print(f"Warning: Could not find author file in {directory}")
-        return None
-    return author_files[0]
+    # もし author_file が見つからず root_file だけある場合は、
+    # root_file に著者が書かれていると仮定する（フォールバック）
+    if root_file and not author_file:
+        author_file = root_file
+    
+    return root_file, author_file
 
 def download_and_extract_source(paper):
     arxiv_id = paper.get_short_id()
@@ -73,27 +83,31 @@ def download_and_extract_source(paper):
 
     tar_path = paper_dir / f"{arxiv_id}.tar.gz"
     if not tar_path.exists():
-        print(f"\n--- Downloading {arxiv_id} ---")
         paper.download_source(dirpath=str(paper_dir), filename=tar_path.name)
     
     try:
         with tarfile.open(tar_path) as tar:
             tar.extractall(path=paper_dir)
 
-        author_tex = find_author_file(paper_dir)
-        if author_tex:
-            # ファイル名だけを保存（ディレクトリ移動に強くするため）
-            metadata = {
-                "title": paper.title,
-                "author_file": author_tex.name,
-                "arxiv_id": paper.get_short_id()
-            }
-            save_metadata(paper_dir, metadata)         
+        # 改良した関数で構造を特定
+        root_tex, author_tex = find_paper_structure(paper_dir)
         
+        # どちらか一方でも見つかれば metadata を作成する
+        if root_tex or author_tex:
+            metadata = {
+                "arxiv_id": arxiv_id,
+                "title": paper.title,
+                "root_file": root_tex.name if root_tex else None,
+                "author_file": author_tex.name if author_tex else None
+            }
+            save_metadata(paper_dir, metadata)
+            print(f" [Success] Metadata created for {arxiv_id}")
+        else:
+            print(f" [Warning] Structure not identified for {arxiv_id}")
 
     except Exception as e:
         print(f"Failed to process {arxiv_id}: {e}")
-
+        
 def save_metadata(paper_dir, paper_info):
     with open(paper_dir / "metadata.json", "w", encoding="utf-8") as f:
         json.dump(paper_info, f, indent=4, ensure_ascii=False)

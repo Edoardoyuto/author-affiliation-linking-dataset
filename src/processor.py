@@ -41,7 +41,6 @@ def run_pipeline():
             doc_class = extractor.detect_class(content)
 
             # 2. amsart の場合
-            # 2. amsart の場合
             if doc_class == "amsart":
                 authors_data = extractor.extract_amsart(content)
                 
