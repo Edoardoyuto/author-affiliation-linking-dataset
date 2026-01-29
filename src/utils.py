@@ -47,8 +47,9 @@ def append_to_jsonl(path, data):
 
 def get_tex_paths(folder_path):
     """
-    ドキュメントクラス判定用(root)と著者抽出用(author)のTeXパスを特定する。
+    ドキュメントクラス判定用(root)と著者抽出用(author)のパスを特定する。
     1. metadata.json の指定を確認
+    2. なければ main.tex などを探す
     """
     metadata_path = os.path.join(folder_path, "metadata.json")
     root_path = None
@@ -67,6 +68,28 @@ def get_tex_paths(folder_path):
                 if a_file:
                     author_path = os.path.join(folder_path, a_file)
         except Exception as e:
-            print(f"  [Warning] metadata.json の読み込み失敗 ({folder_path}): {e}")
+            print(f"  [Warning] metadata.json 読み込み失敗 ({folder_path}): {e}")
 
-        return root_path, author_path
+    # --- 2. フォールバック（メタデータがない、またはファイルが見つからない場合） ---
+    if not root_path or not os.path.exists(root_path):
+        # フォルダ内を直接探す
+        candidates = ["main.tex", f"{os.path.basename(folder_path)}.tex"]
+        for c in candidates:
+            p = os.path.join(folder_path, c)
+            if os.path.exists(p):
+                root_path = p
+                break
+        
+        # それでもなければ、最初に見つかった .tex を採用
+        if not root_path:
+            for f in os.listdir(folder_path):
+                if f.endswith(".tex"):
+                    root_path = os.path.join(folder_path, f)
+                    break
+
+    # author_path が決まっていなければ root_path と同じにする
+    if not author_path or not os.path.exists(author_path):
+        author_path = root_path
+
+    # 【重要】関数の最後で必ずタプルとして返す
+    return root_path, author_path
