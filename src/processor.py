@@ -15,7 +15,7 @@ def run_pipeline():
     manifest = load_manifest(MANIFEST_PATH)
     arxiv_ids = [d for d in os.listdir(SOURCE_DIR) if os.path.isdir(os.path.join(SOURCE_DIR, d))]
     
-    print(f"--- 🚀 抽出フェーズ開始: {len(arxiv_ids)} フォルダ ---")
+    print(f"---  抽出開始: {len(arxiv_ids)} フォルダ ---")
     counts = {"success": 0, "skipped": 0, "error": 0}
 
     for aid in arxiv_ids:
@@ -31,12 +31,12 @@ def run_pipeline():
             continue
 
         try:
-            # --- フェーズA: ドキュメントクラスの判定 ---
+            # --- ドキュメントクラスの判定 ---
             with open(root_path, 'r', encoding='utf-8', errors='ignore') as f:
                 root_content = extractor.parser.strip_comments(f.read())
             doc_class = extractor.detect_class(root_content)
 
-            # --- フェーズB: 著者情報の読み込み ---
+            # --- 著者情報の読み込み ---
             # クラス判定用と著者情報用が別ファイルなら開き直す
             if root_path != author_path and os.path.exists(author_path):
                 with open(author_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -44,7 +44,7 @@ def run_pipeline():
             else:
                 author_content = root_content
 
-            # --- フェーズC: クラスに応じた抽出処理 (自動振り分け) ---
+            # --- クラスに応じた抽出処理 (自動振り分け) ---
             # extractor.extract() が dispatch_map を見て適切なメソッドを呼び出す
             authors_data = extractor.extract(doc_class, author_content)
 
@@ -55,7 +55,7 @@ def run_pipeline():
                 record_log(aid, "SUCCESS", "抽出成功", doc_class, len(authors_data))
                 manifest[aid] = {"status": "success", "class": doc_class}
                 counts["success"] += 1
-                print(f"✅ [{doc_class}] {aid}: {len(authors_data)} authors.")
+                print(f"success[{doc_class}] {aid}: {len(authors_data)} authors.")
             
             elif doc_class in extractor.dispatch_map:
                 # 【失敗】対応クラスなのに抽出できなかった（正規表現の不一致など）

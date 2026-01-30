@@ -7,10 +7,10 @@ class InformationExtractor:
         # クラス名とメソッドの対応表
         self.dispatch_map = {
             "amsart": self.extract_amsart,
-            "article": self.extract_article,    # これから作る
+            #"article": self.extract_article,    # これから作る
             "revtex4-1": self.extract_revtex,  # これから作る
             "revtex4-2": self.extract_revtex,  # これから作る
-            "ieeeconf": self.extract_ieee      # これから作る
+            #"ieeeconf": self.extract_ieee      # これから作る
         }
     
     def detect_class(self, content):
@@ -29,52 +29,39 @@ class InformationExtractor:
         return None  # 未対応の場合は None
     
     def extract_amsart(self, content):
-        """
-        1人の著者に複数の \address があっても、リスト形式で全て保持します。
-        共同所属の場合は、リストごと引き継ぎます。
-        """
-        segments = re.split(r'(\\author)', content)
-        author_blocks = []
-        for i in range(1, len(segments), 2):
-            author_blocks.append(segments[i] + segments[i+1])
+        pattern = re.compile(r'\\(author|address)(?:\[.*?\])?\{(.*?)\}', re.DOTALL)
+        matches = pattern.findall(content)
+        results, pending_queue, last_action = [], [], None
 
-        temp_results = []
-        
-        # --- ブロックごとの解析 ---
-        for block in author_blocks:
-            # 著者の抽出（[...]を許容）
-            name_match = re.search(r'\\author(?:\[.*?\])?\{([^{}]+)\}', block)
-            if not name_match: continue
-            
-            # --- ここを修正：\address の直後に [...] があっても無視して { } を探す ---
-            # re.DOTALL を入れることで、{}内での改行にも対応できます
-            affils = [self.parser.clean_text(a) for a in re.findall(r'\\address(?:\[.*?\])?\{(.*?)\}', block, re.DOTALL)]
-            
-            temp_results.append({
-                "name": self.parser.clean_text(name_match.group(1)),
-                "affiliations": affils
-            })
+        for cmd, val in matches:
+            val = self.parser.clean_text(val)
+            if cmd == "author":
+                if last_action == "address": pending_queue = [] # 次の著者が来たらリセット
+                obj = {"name": val, "affiliations": []}
+                results.append(obj)
+                pending_queue.append(obj)
+                last_action = "author"
+            elif cmd == "address":
+                for author in pending_queue:
+                    if val not in author["affiliations"]: author["affiliations"].append(val)
+                last_action = "address"
+        return [a for a in results if a["affiliations"]]
 
-        # --- 引き継ぎロジックを「前後」対応にするとさらに盤石 ---
-        final_results = []
-        for i in range(len(temp_results)):
-            current = temp_results[i]
-            
-            if not current["affiliations"]:
-                # 1. まず後ろ(j > i)を探す
-                for j in range(i + 1, len(temp_results)):
-                    if temp_results[j]["affiliations"]:
-                        current["affiliations"] = temp_results[j]["affiliations"]
-                        break
-                # 2. それでもなければ前(j < i)を探す
-                if not current["affiliations"]:
-                    for j in range(i - 1, -1, -1):
-                        if temp_results[j]["affiliations"]:
-                            current["affiliations"] = temp_results[j]["affiliations"]
-                            break
-            
-            # 最終的に所属が見つかった著者のみ採用（確実に抽出可能なもののみ）
-            if current["affiliations"]:
-                final_results.append(current)
+    def extract_revtex(self, content):
+        pattern = re.compile(r'\\(author|affiliation|altaffiliation)(?:\[.*?\])?\{(.*?)\}', re.DOTALL)
+        matches = pattern.findall(content)
+        results, pending_queue, last_action = [], [], None
 
-        return final_results
+        for cmd, val in matches:
+            val = self.parser.clean_text(val)
+            if cmd == "author":
+                if last_action in ["affiliation", "altaffiliation"]: pending_queue = []
+                obj = {"name": val, "affiliations": []}
+                results.append(obj)
+                pending_queue.append(obj)
+                last_action = "author"
+            elif cmd in ["affiliation", "altaffiliation"]: # 現所属も所属リストに加える
+                for author in pending_queue:
+                    if val not in author["affiliations"]: author["affiliations"].append(val)
+                last_action = cmd
+        return [a for a in results if a["affiliations"]]
