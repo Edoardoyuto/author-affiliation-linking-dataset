@@ -8,8 +8,11 @@ class InformationExtractor:
         self.dispatch_map = {
             "amsart": self.extract_amsart,
             #"article": self.extract_article,    # これから作る
-            "revtex4-1": self.extract_revtex,  # これから作る
-            "revtex4-2": self.extract_revtex,  # これから作る
+            "revtex4-1": self.extract_revtex,  
+            "revtex4-2": self.extract_revtex,  
+            "revtex4": self.extract_revtex,  
+            "apsrev4-1": self.extract_revtex,  
+            "apsrev4-2": self.extract_revtex
             #"ieeeconf": self.extract_ieee      # これから作る
         }
     
