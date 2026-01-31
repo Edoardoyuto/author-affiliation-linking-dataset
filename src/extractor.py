@@ -25,6 +25,7 @@ class InformationExtractor:
             "acmart": self.extract_acmart,
             "acmsmall": self.extract_acmart,
             "aamas": self.extract_acmart,
+    
 
             # --- エルゼビア系 ---
             "elsarticle": self.extract_elsarticle,
