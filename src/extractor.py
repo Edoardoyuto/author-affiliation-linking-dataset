@@ -5,18 +5,34 @@ class InformationExtractor:
     def __init__(self):
         self.parser = LatexParser()
         # クラス名とメソッドの対応表
+        # 基本となる抽出メソッドの定義
         self.dispatch_map = {
+            # --- amsart ---
             "amsart": self.extract_amsart,
-            #"article": self.extract_article,    # これから作る
-            "revtex4-1": self.extract_revtex,  
-            "revtex4-2": self.extract_revtex,  
-            "revtex4": self.extract_revtex,  
-            "apsrev4-1": self.extract_revtex,  
+            "amsproc": self.extract_amsart,
+
+            # --- REVTeX系 ---
+            "revtex4": self.extract_revtex,
+            "revtex4-1": self.extract_revtex,
+            "revtex4-2": self.extract_revtex,
+            "apsrev4-1": self.extract_revtex,
             "apsrev4-2": self.extract_revtex,
-            #"ieeeconf": self.extract_ieee      # これから作る
+            "aastex631": self.extract_revtex, 
+            "aastex7": self.extract_revtex,
+            "aa": self.extract_revtex,
+
+            # --- acmart系 ---
             "acmart": self.extract_acmart,
             "acmsmall": self.extract_acmart,
+            "aamas": self.extract_acmart,
+
+            # --- エルゼビア系 ---
             "elsarticle": self.extract_elsarticle,
+            "cas-dc": self.extract_elsarticle, # 同じロジックでいける
+
+            # --- Springer流派 ---
+            "sn-jnl": self.extract_sn_jnl,
+            #"llncs": self.extract_llncs, # 後で作成
         }
     
     def detect_class(self, content):
@@ -235,5 +251,52 @@ class InformationExtractor:
                     l = l.strip()
                     if l in id_map and id_map[l] not in author["affiliations"]:
                         author["affiliations"].append(id_map[l])
+
+        return [a for a in results if a["affiliations"]]
+    
+    def extract_sn_jnl(self, content):
+        """
+        [sn-jnl 専用：タグ＆IDマッピング方式]
+        fnm/sur タグと orgname タグを狙い撃ちし、IDで紐付けます。
+        """
+        # 1. 所属の辞書を作成 ( \affil[ID]{...} )
+        affil_pattern = re.compile(r'\\affil(?:\[(.*?)\])?\{(.*?)\}', re.DOTALL)
+        affils = affil_pattern.findall(content)
+        
+        id_to_org = {}
+        for aid, text in affils:
+            # \orgname{...} と \orgdiv{...} を抽出して結合
+            org_name = re.search(r'\\orgname\{(.*?)\}', text)
+            org_div = re.search(r'\\orgdiv\{(.*?)\}', text)
+            
+            parts = [p.group(1) for p in [org_div, org_name] if p]
+            clean_org = ", ".join([self.parser.clean_text(p) for p in parts])
+            
+            if aid:
+                for a in aid.split(','):
+                    id_to_org[a.strip()] = clean_org
+
+        # 2. 著者を抽出して ID で紐付け
+        author_pattern = re.compile(r'\\author\*?(?:\[(.*?)\])?\{(.*?)\}', re.DOTALL)
+        authors = author_pattern.findall(content)
+        
+        results = []
+        for aid, body in authors:
+            # 姓名をタグから合成 ( \fnm{Taro} \sur{Yamada} )
+            fnm = re.search(r'\\fnm\{(.*?)\}', body)
+            sur = re.search(r'\\sur\{(.*?)\}', body)
+            full_name = " ".join([p.group(1) for p in [fnm, sur] if p])
+            
+            if not full_name: # タグがない場合は中身をそのまま掃除
+                full_name = self.parser.clean_text(body)
+
+            author_affils = []
+            if aid:
+                for a in aid.split(','):
+                    a = a.strip()
+                    if a in id_to_org:
+                        author_affils.append(id_to_org[a])
+            
+            results.append({"name": full_name, "affiliations": author_affils})
 
         return [a for a in results if a["affiliations"]]
