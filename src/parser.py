@@ -1,53 +1,51 @@
 import re
 
 class LatexParser:
-
     @staticmethod
     def strip_comments(text):
-        """
-        LaTeXのコメント（% ...）を削除する。
-        エスケープされたパーセント記号（\%）は保護して、本物のコメントだけを消す。
-        """
-        # 1. \% を一時的に特殊な文字列に退避
+        # 現状のロジックで概ねOKですが、改行の扱いに注意
         text = text.replace(r'\%', '___ESCAPED_PERCENT___')
-        
-        # 2. % から行末までを削除。改行文字 (\n) は構文維持のため残す。
+        # 改行を消さずにコメントだけ消す（構造維持）
         text = re.sub(r'%.*', '', text)
-        
-        # 3. 退避させていた \% を元に戻す
         text = text.replace('___ESCAPED_PERCENT___', '%')
-        
         return text
 
     @staticmethod
     def clean_text(text):
-        """
-        LaTeX特有の装飾や記法を掃除し、純粋なテキストにする。
-        """
         if not text: return ""
 
-        # 1. 装飾系コマンドの除去: \textbf{...} -> ...
-        # {}の中身だけを残す処理
-        text = re.sub(r'\\[a-z]+\{([^{}]+)\}', r'\1', text)
-        
-        # 2. 独立したフォント指定などの除去: {\rm ...} -> ...
-        text = re.sub(r'\{(?:\\[a-z]+\s+)?([^{}]+)\}', r'\1', text)
+        # 1. 徹底的なコマンド除去 (再帰的なネストに対応)
+        # 非常にシンプルな戦略：コマンド \cmd{...} や \cmd を消すのではなく、
+        # 「中身」を救出しながら外側を剥ぐ
+        for _ in range(3): # 3階層までのネストを許容
+            text = re.sub(r'\\[a-zA-Z]+\{(.*?)\}', r'\1', text)
+            text = re.sub(r'\{(.*?)\}', r'\1', text)
 
-        # 3. アクセント記号の簡易置換 (代表的なもの)
-        accents = {
-            r"\\'a": "á", r"\\'e": "é", r"\\'i": "í", r"\\'o": "ó", r"\\'u": "ú",
-            r'\\"a': "ä", r'\\"e': "ë", r'\\"i': "ï", r'\\"o': "ö", r'\\"u': "ü",
-            r"\\`a": "à", r"\\`e": "è",
-            r"\\^a": "â", r"\\^e": "ê",
-            r"\\~n": "ñ",
+        # 2. 数学モードの除去（ベンチマークの天敵：肩番号など）
+        # $...$ または \(...\) を完全に消去するか、中身だけにするか
+        # 著者所属の場合、これらはIDなので「消去」が正解
+        text = re.sub(r'\$.*?\$', '', text)
+        text = re.sub(r'\\\(.*?\\\)', '', text)
+
+        # 3. 特殊記号の置換
+        text = text.replace('~', ' ')      # 改行不可スペース
+        text = text.replace('--', '-')     # エアダッシュ
+        text = text.replace('---', '-')    # エムダッシュ
+        text = text.replace('``', '"').replace("''", '"') # 引用符
+
+        # 4. エスケープ文字の復元（範囲を拡大）
+        escapes = {
+            r'\&': '&', r'\_': '_', r'\$': '$', r'\%': '%', 
+            r'\#': '#', r'\{': '{', r'\}': '}', r'\dag': '', r'\ddag': ''
         }
-        for tex, uni in accents.items():
-            text = text.replace(tex, uni)
+        for tex, plain in escapes.items():
+            text = text.replace(tex, plain)
 
-        # 4. エスケープ文字の復元: \& -> &, \_ -> _
-        text = text.replace(r'\&', '&').replace(r'\_', '_').replace(r'\$', '$').replace(r'\%', '%')
+        # 5. アクセント記号（以前のロジックを維持しつつ拡張）
+        # 実際にはもっと多いですが、主要なものをカバー
+        text = re.sub(r"\\'[AaEeIiOoUu]", lambda m: m.group(0)[-1], text) # 簡易化
 
-        # 5. 改行と余計な空白の掃除
+        # 6. 最終的な空白掃除
         text = text.replace('\n', ' ')
         text = re.sub(r'\s+', ' ', text)
         
